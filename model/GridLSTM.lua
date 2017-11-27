@@ -63,8 +63,8 @@ function GridLSTM.grid_lstm(input_size, rnn_size, n, dropout, should_tie_weights
 
   for L = 1,n do
     -- Take hidden and memory cell from previous time steps
-    local prev_c_t = inputs[L*2+1]
-    local prev_h_t = inputs[L*2+2]
+    local prev_c_t = inputs[L*2+1]  -- in grid-lstm, cell and hidden values exist along both depth dim and time dim
+    local prev_h_t = inputs[L*2+2]  -- so as input, we have prev_c_t, prev_h_t; and prev_c_d, prev_h_d separately
 
     if L == 1 then
       -- We're in the first layer
