@@ -6,14 +6,14 @@ require 'nngraph'
 
   It takes h_t and h_d, the hidden states from the temporal and 
   depth dimensions respectively, as well as prev_c, the 
-  dimension's previous memory cell.
+  dimension's (either depth or temporal) previous memory cell.
 
   It returns next_c, next_h along the dimension, using a standard
   lstm gated update, conditioned on the concatenated time and 
   depth hidden states.
 --]]
 function lstm(h_t, h_d, prev_c, rnn_size)
-  local all_input_sums = nn.CAddTable()({h_t, h_d})
+  local all_input_sums = nn.CAddTable()({h_t, h_d}) -- h_t and h_d already connected in a linear module with output size 4*rnn_size
   local reshaped = nn.Reshape(4, rnn_size)(all_input_sums)
   local n1, n2, n3, n4 = nn.SplitTable(2)(reshaped):split(4)
   -- decode the gates
@@ -48,11 +48,11 @@ function GridLSTM.grid_lstm(input_size, rnn_size, n, dropout, should_tie_weights
 
   -- There will be 2*n+1 inputs
   local inputs = {}
-  table.insert(inputs, nn.Identity()()) -- input c for depth dimension
-  table.insert(inputs, nn.Identity()()) -- input h for depth dimension
-  for L = 1,n do
-    table.insert(inputs, nn.Identity()()) -- prev_c[L] for time dimension
-    table.insert(inputs, nn.Identity()()) -- prev_h[L] for time dimension
+  table.insert(inputs, nn.Identity()()) -- input c for time dimension
+  table.insert(inputs, nn.Identity()()) -- input h for time dimension
+  for L = 1,n do    -- the param n is number of layers
+    table.insert(inputs, nn.Identity()()) -- prev_c[L] for depth dimension
+    table.insert(inputs, nn.Identity()()) -- prev_h[L] for depth dimension
   end
 
   local shared_weights
@@ -64,7 +64,7 @@ function GridLSTM.grid_lstm(input_size, rnn_size, n, dropout, should_tie_weights
   for L = 1,n do
     -- Take hidden and memory cell from previous time steps
     local prev_c_t = inputs[L*2+1]  -- in grid-lstm, cell and hidden values exist along both depth dim and time dim
-    local prev_h_t = inputs[L*2+2]  -- so as input, we have prev_c_t, prev_h_t; and prev_c_d, prev_h_d separately
+    local prev_h_t = inputs[L*2+2]  -- so as input, we have prev_c_d, prev_h_d; and prev_c_t, prev_h_t separately
 
     if L == 1 then
       -- We're in the first layer
@@ -90,7 +90,7 @@ function GridLSTM.grid_lstm(input_size, rnn_size, n, dropout, should_tie_weights
     table.insert(outputs_t, next_h_t)
 
     -- Evaluate the input sums at once for efficiency
-    local t2h_d = nn.Linear(rnn_size, 4 * rnn_size)(next_h_t):annotate{name='i2h_'..L}
+    local t2h_d = nn.Linear(rnn_size, 4 * rnn_size)(next_h_t):annotate{name='i2h_'..L}  -- Attention: this is next hidden value along temporal dim
     local d2h_d = nn.Linear(rnn_size, 4 * rnn_size)(prev_h_d):annotate{name='h2h_'..L}
 
     -- See section 3.5, "Weight Sharing" of http://arxiv.org/pdf/1507.01526.pdf
